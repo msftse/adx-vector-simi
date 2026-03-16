@@ -1,0 +1,6 @@
+.env
+producer.log
+producer.pid
+.ruff_cache/
+__pycache__/
+*.pyc
