@@ -1,0 +1,68 @@
+# Vector configuration — Event Hub (Kafka protocol) → ADX
+#
+# NOTE: This config uses OAUTHBEARER/OIDC for Event Hub auth.
+# Vector's Docker images (all variants) do NOT support OAUTHBEARER because
+# librdkafka was compiled without libcurl/OpenSSL OIDC support.
+# The working approach is the Python producer (producer.py) which uses
+# the azure-eventhub SDK with ClientSecretCredential.
+#
+# Kept here for reference / future use if Vector adds OAUTHBEARER support.
+
+sources:
+  demo_logs:
+    type: demo_logs
+    format: json
+    interval: 0.00024  # ~4,167 events/sec → 250k/min
+
+transforms:
+  parse_and_enrich:
+    type: remap
+    inputs:
+      - demo_logs
+    source: |
+      # Parse the demo_logs JSON
+      parsed = parse_json!(.message)
+
+      # Map to VectorLogs schema
+      .Timestamp = now()
+      .Host = parsed.host
+      .Service = parsed.service
+      .Message = join!([to_string(parsed.method) ?? "GET", to_string(parsed.path) ?? "/"], " ")
+      .Severity = parsed.severity
+      .Method = to_string(parsed.method) ?? "GET"
+      .StatusCode = to_int(parsed.status) ?? 200
+      .BytesSent = to_int(parsed.bytes_out) ?? 0
+      .DurationMs = to_float(parsed.duration_ms) ?? 0.0
+      .SourceType = "vector-demo-logs"
+      .VectorHostname = get_hostname!()
+
+      # Remove original fields
+      del(.message)
+      del(.timestamp)
+      del(.source_type)
+
+sinks:
+  eventhub_kafka:
+    type: kafka
+    inputs:
+      - parse_and_enrich
+    bootstrap_servers: "${EVENTHUB_NAMESPACE}:9093"
+    topic: "${EVENTHUB_NAME}"
+    encoding:
+      codec: json
+    compression: none
+
+    # Azure Event Hub Kafka settings
+    librdkafka_options:
+      security.protocol: SASL_SSL
+      sasl.mechanism: OAUTHBEARER
+      sasl.oauthbearer.method: oidc
+      sasl.oauthbearer.client.id: "${AZURE_CLIENT_ID}"
+      sasl.oauthbearer.client.secret: "${AZURE_CLIENT_SECRET}"
+      sasl.oauthbearer.token.endpoint.url: "https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token"
+      sasl.oauthbearer.scope: "https://${EVENTHUB_NAMESPACE}/.default"
+
+    # Batching for throughput
+    batch:
+      max_bytes: 1048576
+      timeout_secs: 1

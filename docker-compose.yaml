@@ -1,0 +1,21 @@
+# Docker Compose — Vector log generator → Event Hub (Kafka protocol)
+#
+# NOTE: This does NOT work out of the box — Vector's Docker images lack
+# OAUTHBEARER/OIDC support in librdkafka. See vector.yaml header for details.
+# Use producer.py instead for a working solution.
+#
+# Kept for reference / future use.
+
+services:
+  vector:
+    image: timberio/vector:0.54.0-debian
+    volumes:
+      - ./vector.yaml:/etc/vector/vector.yaml:ro
+    environment:
+      - VECTOR_CONFIG=/etc/vector/vector.yaml
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - EVENTHUB_NAMESPACE=${EVENTHUB_NAMESPACE:-ehvectorlogs2.servicebus.windows.net}
+      - EVENTHUB_NAME=${EVENTHUB_NAME:-vectorlogs}
+    restart: unless-stopped
