@@ -2,7 +2,11 @@
 """
 Event Hub Log Producer — sends 250k logs/min to Azure Event Hub
 Uses Azure AD service principal auth (SAS keys disabled by policy)
-Event Hub → ADX data connection → VectorLogs table (queued ingestion)
+Event Hub → ADX data connection → VectorLogs table (streaming ingestion)
+
+To enable streaming ingestion on the ADX table, run the following KQL command:
+    .alter table VectorLogs policy streamingingestion '{"IsEnabled": true, "HintAllocatedRate": 2.1}'
+Adjust HintAllocatedRate (GB/hour) based on your actual ingestion volume.
 
 Architecture: 4 threads, one per Event Hub partition, each sending independently.
 """
